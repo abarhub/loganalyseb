@@ -1,10 +1,16 @@
 package org.loganalyseb.loganalyseb.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.function.FailableConsumer;
 import org.loganalyseb.loganalyseb.exception.PlateformeException;
 import org.loganalyseb.loganalyseb.model.*;
 import org.loganalyseb.loganalyseb.properties.AppProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -17,19 +23,25 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
-import java.util.function.Consumer;
 
 @Slf4j
 public class AnalyseService {
+
+    private static final Logger ANALYTICS = LoggerFactory.getLogger("analytics");
 
     private final DateTimeFormatter formatters = DateTimeFormatter.ofPattern("yyyyMMdd");
     private final DateTimeFormatter formatter2 = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss: ");
     private final String BOM_UTF_16LE = "\uFEFF";
 
+    private ObjectMapper objectMapper;
+
     private final AppProperties appProperties;
 
     public AnalyseService(AppProperties appProperties) {
         this.appProperties = appProperties;
+        objectMapper = new ObjectMapper();
+        objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+        objectMapper.findAndRegisterModules();
     }
 
     public void analyse() throws PlateformeException {
@@ -43,27 +55,7 @@ public class AnalyseService {
 
             if (appProperties.getDateAnalyse() != null) {
 
-                BackupLog backupLog = new BackupLog();
-
-
-                parse(repertoireLog,"log_backup",appProperties.getDateAnalyse(),(file)->{
-                    parseLogNasbackup(file, backupLog);
-                });
-
-                parse(repertoireLog,"log_backup_ovh",appProperties.getDateAnalyse(),(file)->{
-                    parseLogOvh(file, backupLog);
-                });
-
-                parse(repertoireLog,"log_backup_github",appProperties.getDateAnalyse(),(file)->{
-                    parseLogGithub(file, backupLog);
-                });
-
-
-                parse(repertoireLog,"log_backup_restic",appProperties.getDateAnalyse(),(file)->{
-                    parseLogRestic(file, backupLog);
-                });
-
-                log.info("resultat: {}", backupLog);
+                analyseDate(repertoireLog, appProperties.getDateAnalyse());
 
             }
 
@@ -72,8 +64,47 @@ public class AnalyseService {
         }
     }
 
-    private void parse(Path repertoireLog, String debutNom, LocalDate date, FailableConsumer<Path,PlateformeException> consumer) throws PlateformeException {
-        var glob = "glob:"+debutNom+"_" + formatters.format(date) + "_*.log";
+    private void analyseDate(Path repertoireLog, LocalDate dateAnalyse) throws PlateformeException {
+        try {
+            MDC.put("date", DateTimeFormatter.ISO_DATE.format(dateAnalyse));
+
+            BackupLog backupLog = new BackupLog();
+            backupLog.setTimestamp(dateAnalyse);
+
+            parse(repertoireLog, "log_backup", dateAnalyse, (file) -> {
+                parseLogNasbackup(file, backupLog);
+            });
+
+            parse(repertoireLog, "log_backup_ovh", dateAnalyse, (file) -> {
+                parseLogOvh(file, backupLog);
+            });
+
+            parse(repertoireLog, "log_backup_github", dateAnalyse, (file) -> {
+                parseLogGithub(file, backupLog);
+            });
+
+
+            parse(repertoireLog, "log_backup_restic", dateAnalyse, (file) -> {
+                parseLogRestic(file, backupLog);
+            });
+
+            log.info("resultat: {}", backupLog);
+
+            if (ANALYTICS.isInfoEnabled()) {
+                try {
+                    var s = objectMapper.writeValueAsString(backupLog);
+                    ANALYTICS.info("{}", s);
+                } catch (JsonProcessingException e) {
+                    throw new PlateformeException("Erreur pour créer le json résultat", e);
+                }
+            }
+        } finally {
+            MDC.remove("date");
+        }
+    }
+
+    private void parse(Path repertoireLog, String debutNom, LocalDate date, FailableConsumer<Path, PlateformeException> consumer) throws PlateformeException {
+        var glob = "glob:" + debutNom + "_" + formatters.format(date) + "_*.log";
         var resultat = findFile(repertoireLog, glob);
         if (resultat.isPresent()) {
             var file = resultat.get();
@@ -190,7 +221,7 @@ public class AnalyseService {
         Optional<LocalDateTime> dateDebut = Optional.empty(), dateFin = Optional.empty();
         Optional<LocalDateTime> dateDebutRClone = Optional.empty();
         boolean debut = false;
-        int nbErreur=0;
+        int nbErreur = 0;
         log.info("analyse du fichier: {}", file.getFileName());
         try (var lignes = Files.lines(file, StandardCharsets.UTF_16LE)) {
             Iterable<String> iterableStream = lignes::iterator;
@@ -222,8 +253,8 @@ public class AnalyseService {
                     }
 
                 }
-                if(ligne!=null){
-                    if(ligne.contains("stderr")||ligne.contains("ERROR")){
+                if (ligne != null) {
+                    if (ligne.contains("stderr") || ligne.contains("ERROR")) {
                         nbErreur++;
                     }
                 }
@@ -246,15 +277,14 @@ public class AnalyseService {
     }
 
 
-
     private void parseLogRestic(Path file, BackupLog backupLog) throws PlateformeException {
         Optional<LocalDateTime> dateDebut = Optional.empty(), dateFin = Optional.empty();
-        Optional<LocalDateTime> dateDebutFull2Backup = Optional.empty(),dateDebutFull2Forget = Optional.empty();
-        Optional<LocalDateTime> dateDebutNasbackupBackup = Optional.empty(),dateDebutNasbackupForget = Optional.empty();
-        Optional<LocalDateTime> dateDebutRaspberryBackup = Optional.empty(),dateDebutRaspberryForget = Optional.empty();
+        Optional<LocalDateTime> dateDebutFull2Backup = Optional.empty(), dateDebutFull2Forget = Optional.empty();
+        Optional<LocalDateTime> dateDebutNasbackupBackup = Optional.empty(), dateDebutNasbackupForget = Optional.empty();
+        Optional<LocalDateTime> dateDebutRaspberryBackup = Optional.empty(), dateDebutRaspberryForget = Optional.empty();
         Optional<LocalDateTime> dateDebutRclone = Optional.empty();
         boolean debut = false;
-        int nbErreur=0;
+        int nbErreur = 0;
         log.info("analyse du fichier: {}", file.getFileName());
         try (var lignes = Files.lines(file, StandardCharsets.UTF_16LE)) {
             Iterable<String> iterableStream = lignes::iterator;

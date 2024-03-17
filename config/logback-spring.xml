@@ -37,6 +37,23 @@
         </rollingPolicy>
     </appender>
 
+    <appender name="ANALYTICS-FILE"
+              class="ch.qos.logback.core.FileAppender">
+        <file>${LOGS}/analytics.log</file>
+        <encoder
+                class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <Pattern>%m%n</Pattern>
+        </encoder>
+
+    </appender>
+
+    <logger name="org.loganalyseb.loganalyseb" level="info" />
+
+
+    <logger name="analytics" level="INFO" additivity="false">
+        <appender-ref ref="ANALYTICS-FILE"/>
+    </logger>
+
     <!-- LOG everything at INFO level -->
     <root level="info">
         <appender-ref ref="RollingFile" />
@@ -44,9 +61,9 @@
     </root>
 
     <!-- LOG "com.baeldung*" at TRACE level -->
-    <logger name="org.loganalyseb.loganalyseb" level="info" additivity="false">
-        <appender-ref ref="RollingFile" />
-        <appender-ref ref="Console" />
-    </logger>
+<!--    <logger name="org.loganalyseb.loganalyseb" level="info" >-->
+<!--&lt;!&ndash;        <appender-ref ref="RollingFile" /> additivity="false"&ndash;&gt;-->
+<!--&lt;!&ndash;        <appender-ref ref="Console" />&ndash;&gt;-->
+<!--    </logger>-->
 
 </configuration>
