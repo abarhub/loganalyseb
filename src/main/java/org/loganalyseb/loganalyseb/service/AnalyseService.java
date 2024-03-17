@@ -1,5 +1,7 @@
 package org.loganalyseb.loganalyseb.service;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -42,6 +44,8 @@ public class AnalyseService {
         objectMapper = new ObjectMapper();
         objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         objectMapper.findAndRegisterModules();
+        // pour que les methodes soient serialisées
+        objectMapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
     }
 
     public void analyse() throws PlateformeException {
@@ -88,6 +92,7 @@ public class AnalyseService {
                 parseLogRestic(file, backupLog);
             });
 
+            backupLog.calculDuree();
             log.info("resultat: {}", backupLog);
 
             if (ANALYTICS.isInfoEnabled()) {

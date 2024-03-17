@@ -2,6 +2,7 @@ package org.loganalyseb.loganalyseb.model;
 
 import lombok.Data;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Data
@@ -11,5 +12,10 @@ public class GithubLog {
     private LocalDateTime dateDebut;
     private LocalDateTime dateFin;
     private int nbErreur;
+    private long dureeTotaleSecondes;
+
+    public void calculDuree() {
+        dureeTotaleSecondes = Duration.between(dateDebut, dateFin).getSeconds();
+    }
 
 }

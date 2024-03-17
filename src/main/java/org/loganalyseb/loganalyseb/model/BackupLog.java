@@ -13,4 +13,18 @@ public class BackupLog {
     private GithubLog githubLog;
     private ResticLog resticLog;
 
+    public void calculDuree() {
+        if (nasbackupLog != null) {
+            nasbackupLog.calculDuree();
+        }
+        if (ovhBackupLog != null) {
+            ovhBackupLog.calculDuree();
+        }
+        if (githubLog != null) {
+            githubLog.calculDuree();
+        }
+        if (resticLog != null) {
+            resticLog.calculDuree();
+        }
+    }
 }

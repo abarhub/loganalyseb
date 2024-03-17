@@ -13,14 +13,10 @@ public class NasbackupLog {
     private LocalDateTime dateDebut;
     private LocalDateTime dateFin;
     private int nbErreur;
+    private long dureeTotaleSecondes;
 
-    @JsonProperty("dureeTotaleSecondes")
-    public long duree() {
-        if (dateDebut != null && dateFin != null) {
-            return Duration.between(dateDebut, dateFin).getSeconds();
-        } else {
-            return 0L;
-        }
+    public void calculDuree() {
+        dureeTotaleSecondes=Duration.between(dateDebut, dateFin).getSeconds();
     }
 
 }
