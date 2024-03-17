@@ -3,6 +3,7 @@ package org.loganalyseb.loganalyseb.service;
 import lombok.extern.slf4j.Slf4j;
 import org.loganalyseb.loganalyseb.exception.PlateformeException;
 import org.loganalyseb.loganalyseb.model.BackupLog;
+import org.loganalyseb.loganalyseb.model.GithubLog;
 import org.loganalyseb.loganalyseb.model.NasbackupLog;
 import org.loganalyseb.loganalyseb.model.OvhBackupLog;
 import org.loganalyseb.loganalyseb.properties.AppProperties;
@@ -68,6 +69,19 @@ public class AnalyseService {
                     log.warn("Impossible de trouver le fichier {}", glob);
                 }
 
+
+                glob = "glob:log_backup_github_" + formatters.format(appProperties.getDateAnalyse()) + "_*.log";
+                resultat = findFile(repertoireLog, glob);
+                if (resultat.isPresent()) {
+                    var file = resultat.get();
+                    log.info("trouve: {}", file);
+
+                    parseLogGithub(file, backupLog);
+
+                } else {
+                    log.warn("Impossible de trouver le fichier {}", glob);
+                }
+
                 log.info("resultat: {}", backupLog);
 
             }
@@ -116,6 +130,7 @@ public class AnalyseService {
         log.info("date debut={}, date fin={}", dateDebut, dateFin);
 
         NasbackupLog nasbackupLog = new NasbackupLog();
+        nasbackupLog.setNomFichier(file.getFileName().toString());
         dateDebut.ifPresent(nasbackupLog::setDateDebut);
         dateFin.ifPresent(nasbackupLog::setDateFin);
         backupLog.setNasbackupLog(nasbackupLog);
@@ -168,10 +183,70 @@ public class AnalyseService {
         log.info("date debut={}, date fin={}", dateDebut, dateFin);
 
         var ovhBackupLog = new OvhBackupLog();
+        ovhBackupLog.setNomFichier(file.getFileName().toString());
         dateDebut.ifPresent(ovhBackupLog::setDateDebut);
         dateFin.ifPresent(ovhBackupLog::setDateFin);
         dateDebutRClone.ifPresent(ovhBackupLog::setDateDebutRclone);
         backupLog.setOvhBackupLog(ovhBackupLog);
+    }
+
+    private void parseLogGithub(Path file, BackupLog backupLog) throws PlateformeException {
+        Optional<LocalDateTime> dateDebut = Optional.empty(), dateFin = Optional.empty();
+        Optional<LocalDateTime> dateDebutRClone = Optional.empty();
+        boolean debut = false;
+        int nbErreur=0;
+        log.info("analyse du fichier: {}", file.getFileName());
+        try (var lignes = Files.lines(file, StandardCharsets.UTF_16LE)) {
+            Iterable<String> iterableStream = lignes::iterator;
+            int noLigne = 1;
+            for (var ligne : iterableStream) {
+                LocalDateTime dateTime = null;
+                if (ligne != null && ligne.length() > 20) {
+                    var s = ligne;
+                    if (!debut) {
+                        s = removeUTF16_LEBOM(s);
+                    }
+                    s = s.substring(0, 21);
+                    try {
+                        dateTime = LocalDateTime.parse(s, formatter2);
+                    } catch (DateTimeParseException e) {
+                        log.warn("Le format de la date n'est pas bon à la ligne {}", noLigne, e);
+                    }
+                }
+                if (!debut && dateTime != null) {
+                    dateDebut = Optional.of(dateTime);
+                    debut = true;
+                }
+                if (dateTime != null) {
+                    dateFin = Optional.of(dateTime);
+
+                    if (dateDebutRClone.isEmpty() && ligne != null &&
+                            ligne.contains("transfert rclone ovh")) {
+                        dateDebutRClone = Optional.of(dateTime);
+                    }
+
+                }
+                if(ligne!=null){
+                    if(ligne.contains("stderr")||ligne.contains("ERROR")){
+                        nbErreur++;
+                    }
+                }
+                noLigne++;
+            }
+
+
+        } catch (IOException e) {
+            throw new PlateformeException("Erreur pour lire le fichier " + file, e);
+        }
+
+        log.info("date debut={}, date fin={}", dateDebut, dateFin);
+
+        var githubLog = new GithubLog();
+        githubLog.setNomFichier(file.getFileName().toString());
+        dateDebut.ifPresent(githubLog::setDateDebut);
+        dateFin.ifPresent(githubLog::setDateFin);
+        githubLog.setNbErreur(nbErreur);
+        backupLog.setGithubLog(githubLog);
     }
 
 

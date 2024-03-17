@@ -7,5 +7,6 @@ public class BackupLog {
 
     private NasbackupLog nasbackupLog;
     private OvhBackupLog ovhBackupLog;
+    private GithubLog githubLog;
 
 }

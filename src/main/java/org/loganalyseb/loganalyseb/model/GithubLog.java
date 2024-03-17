@@ -5,12 +5,11 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-public class OvhBackupLog {
+public class GithubLog {
 
     private String nomFichier;
     private LocalDateTime dateDebut;
     private LocalDateTime dateFin;
-    private LocalDateTime dateDebutRclone;
-
+    private int nbErreur;
 
 }
