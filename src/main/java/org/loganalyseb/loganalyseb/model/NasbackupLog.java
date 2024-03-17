@@ -16,7 +16,9 @@ public class NasbackupLog {
     private long dureeTotaleSecondes;
 
     public void calculDuree() {
-        dureeTotaleSecondes=Duration.between(dateDebut, dateFin).getSeconds();
+        if (dateDebut != null && dateFin != null) {
+            dureeTotaleSecondes = Duration.between(dateDebut, dateFin).getSeconds();
+        }
     }
 
 }

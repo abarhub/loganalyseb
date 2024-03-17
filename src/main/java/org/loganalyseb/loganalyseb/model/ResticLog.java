@@ -29,13 +29,29 @@ public class ResticLog {
     private long dureeRcloneSecondes;
 
     public void calculDuree() {
-        dureeTotaleSecondes = Duration.between(dateDebut, dateFin).getSeconds();
-        dureeFull2BackupSecondes = Duration.between(dateDebutFull2Backup, dateDebutFull2Forget).getSeconds();
-        dureeFull2FogetSecondes = Duration.between(dateDebutFull2Forget, dateDebutNasbackupBackup).getSeconds();
-        dureeNasbackupBackupSecondes = Duration.between(dateDebutNasbackupBackup, dateDebutNasbackupForget).getSeconds();
-        dureeNasbackupForgetSecondes = Duration.between(dateDebutNasbackupForget, dateDebutRaspberryBackup).getSeconds();
-        dureeRaspberryBackupSecondes = Duration.between(dateDebutRaspberryBackup, dateDebutRaspberryForget).getSeconds();
-        dureeRaspberryForgetSecondes = Duration.between(dateDebutRaspberryForget, dateDebutRclone).getSeconds();
-        dureeRcloneSecondes = Duration.between(dateDebutRclone, dateFin).getSeconds();
+        if (dateDebut != null && dateFin != null) {
+            dureeTotaleSecondes = Duration.between(dateDebut, dateFin).getSeconds();
+        }
+        if (dateDebutFull2Backup != null && dateDebutFull2Forget != null) {
+            dureeFull2BackupSecondes = Duration.between(dateDebutFull2Backup, dateDebutFull2Forget).getSeconds();
+        }
+        if (dateDebutFull2Forget != null && dateDebutNasbackupBackup != null) {
+            dureeFull2FogetSecondes = Duration.between(dateDebutFull2Forget, dateDebutNasbackupBackup).getSeconds();
+        }
+        if (dateDebutNasbackupBackup != null && dateDebutNasbackupForget != null) {
+            dureeNasbackupBackupSecondes = Duration.between(dateDebutNasbackupBackup, dateDebutNasbackupForget).getSeconds();
+        }
+        if (dateDebutNasbackupForget != null && dateDebutRaspberryBackup != null) {
+            dureeNasbackupForgetSecondes = Duration.between(dateDebutNasbackupForget, dateDebutRaspberryBackup).getSeconds();
+        }
+        if (dateDebutRaspberryBackup != null && dateDebutRaspberryForget != null) {
+            dureeRaspberryBackupSecondes = Duration.between(dateDebutRaspberryBackup, dateDebutRaspberryForget).getSeconds();
+        }
+        if (dateDebutRaspberryForget != null && dateDebutRclone != null) {
+            dureeRaspberryForgetSecondes = Duration.between(dateDebutRaspberryForget, dateDebutRclone).getSeconds();
+        }
+        if (dateDebutRclone != null && dateFin != null) {
+            dureeRcloneSecondes = Duration.between(dateDebutRclone, dateFin).getSeconds();
+        }
     }
 }

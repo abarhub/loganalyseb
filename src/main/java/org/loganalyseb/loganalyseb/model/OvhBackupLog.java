@@ -18,9 +18,15 @@ public class OvhBackupLog {
     private long dureeRcloneSecondes;
 
     public void calculDuree() {
-        dureeTotaleSecondes = Duration.between(dateDebut, dateFin).getSeconds();
-        dureeFileutilsSecondes = Duration.between(dateDebut, dateDebutRclone).getSeconds();
-        dureeRcloneSecondes = Duration.between(dateDebutRclone, dateFin).getSeconds();
+        if (dateDebut != null && dateFin != null) {
+            dureeTotaleSecondes = Duration.between(dateDebut, dateFin).getSeconds();
+        }
+        if (dateDebut != null && dateDebutRclone != null) {
+            dureeFileutilsSecondes = Duration.between(dateDebut, dateDebutRclone).getSeconds();
+        }
+        if (dateDebutRclone != null && dateFin != null) {
+            dureeRcloneSecondes = Duration.between(dateDebutRclone, dateFin).getSeconds();
+        }
     }
 
 

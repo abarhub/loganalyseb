@@ -15,4 +15,6 @@ public class AppProperties {
 
     private LocalDate dateAnalyse;
 
+    private String fichierDonnees;
+
 }
