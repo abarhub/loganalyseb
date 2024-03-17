@@ -1,6 +1,7 @@
 package org.loganalyseb.loganalyseb.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.function.FailableConsumer;
 import org.loganalyseb.loganalyseb.exception.PlateformeException;
 import org.loganalyseb.loganalyseb.model.BackupLog;
 import org.loganalyseb.loganalyseb.model.GithubLog;
@@ -14,10 +15,12 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 @Slf4j
 public class AnalyseService {
@@ -45,42 +48,18 @@ public class AnalyseService {
 
                 BackupLog backupLog = new BackupLog();
 
-                var glob = "glob:log_backup_" + formatters.format(appProperties.getDateAnalyse()) + "_*.log";
-                Optional<Path> resultat = findFile(repertoireLog, glob);
-                if (resultat.isPresent()) {
-                    var file = resultat.get();
-                    log.info("trouve: {}", file);
 
+                parse(repertoireLog,"log_backup",appProperties.getDateAnalyse(),(file)->{
                     parseLogNasbackup(file, backupLog);
+                });
 
-                } else {
-                    log.warn("Impossible de trouver le fichier {}", glob);
-                }
-
-                glob = "glob:log_backup_ovh_" + formatters.format(appProperties.getDateAnalyse()) + "_*.log";
-                resultat = findFile(repertoireLog, glob);
-                if (resultat.isPresent()) {
-                    var file = resultat.get();
-                    log.info("trouve: {}", file);
-
+                parse(repertoireLog,"log_backup_ovh",appProperties.getDateAnalyse(),(file)->{
                     parseLogOvh(file, backupLog);
+                });
 
-                } else {
-                    log.warn("Impossible de trouver le fichier {}", glob);
-                }
-
-
-                glob = "glob:log_backup_github_" + formatters.format(appProperties.getDateAnalyse()) + "_*.log";
-                resultat = findFile(repertoireLog, glob);
-                if (resultat.isPresent()) {
-                    var file = resultat.get();
-                    log.info("trouve: {}", file);
-
+                parse(repertoireLog,"log_backup_github",appProperties.getDateAnalyse(),(file)->{
                     parseLogGithub(file, backupLog);
-
-                } else {
-                    log.warn("Impossible de trouver le fichier {}", glob);
-                }
+                });
 
                 log.info("resultat: {}", backupLog);
 
@@ -88,6 +67,21 @@ public class AnalyseService {
 
         } else {
             throw new PlateformeException("Le répertoire " + repertoireLog + " n'existe pas");
+        }
+    }
+
+    private void parse(Path repertoireLog, String debutNom, LocalDate date, FailableConsumer<Path,PlateformeException> consumer) throws PlateformeException {
+        var glob = "glob:"+debutNom+"_" + formatters.format(date) + "_*.log";
+        var resultat = findFile(repertoireLog, glob);
+        if (resultat.isPresent()) {
+            var file = resultat.get();
+            log.info("trouve: {}", file);
+
+//            parseLogGithub(file, backupLog);
+            consumer.accept(file);
+
+        } else {
+            log.warn("Impossible de trouver le fichier {}", glob);
         }
     }
 
