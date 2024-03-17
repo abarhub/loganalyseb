@@ -10,6 +10,7 @@ public class NasbackupLog {
     private String nomFichier;
     private LocalDateTime dateDebut;
     private LocalDateTime dateFin;
+    private int nbErreur;
 
 
 }

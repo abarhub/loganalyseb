@@ -11,6 +11,7 @@ public class OvhBackupLog {
     private LocalDateTime dateDebut;
     private LocalDateTime dateFin;
     private LocalDateTime dateDebutRclone;
+    private int nbErreur;
 
 
 }

@@ -3,10 +3,7 @@ package org.loganalyseb.loganalyseb.service;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.function.FailableConsumer;
 import org.loganalyseb.loganalyseb.exception.PlateformeException;
-import org.loganalyseb.loganalyseb.model.BackupLog;
-import org.loganalyseb.loganalyseb.model.GithubLog;
-import org.loganalyseb.loganalyseb.model.NasbackupLog;
-import org.loganalyseb.loganalyseb.model.OvhBackupLog;
+import org.loganalyseb.loganalyseb.model.*;
 import org.loganalyseb.loganalyseb.properties.AppProperties;
 
 import java.io.IOException;
@@ -59,6 +56,11 @@ public class AnalyseService {
 
                 parse(repertoireLog,"log_backup_github",appProperties.getDateAnalyse(),(file)->{
                     parseLogGithub(file, backupLog);
+                });
+
+
+                parse(repertoireLog,"log_backup_restic",appProperties.getDateAnalyse(),(file)->{
+                    parseLogRestic(file, backupLog);
                 });
 
                 log.info("resultat: {}", backupLog);
@@ -241,6 +243,101 @@ public class AnalyseService {
         dateFin.ifPresent(githubLog::setDateFin);
         githubLog.setNbErreur(nbErreur);
         backupLog.setGithubLog(githubLog);
+    }
+
+
+
+    private void parseLogRestic(Path file, BackupLog backupLog) throws PlateformeException {
+        Optional<LocalDateTime> dateDebut = Optional.empty(), dateFin = Optional.empty();
+        Optional<LocalDateTime> dateDebutFull2Backup = Optional.empty(),dateDebutFull2Forget = Optional.empty();
+        Optional<LocalDateTime> dateDebutNasbackupBackup = Optional.empty(),dateDebutNasbackupForget = Optional.empty();
+        Optional<LocalDateTime> dateDebutRaspberryBackup = Optional.empty(),dateDebutRaspberryForget = Optional.empty();
+        Optional<LocalDateTime> dateDebutRclone = Optional.empty();
+        boolean debut = false;
+        int nbErreur=0;
+        log.info("analyse du fichier: {}", file.getFileName());
+        try (var lignes = Files.lines(file, StandardCharsets.UTF_16LE)) {
+            Iterable<String> iterableStream = lignes::iterator;
+            int noLigne = 1;
+            for (var ligne : iterableStream) {
+                LocalDateTime dateTime = null;
+                if (ligne != null && ligne.length() > 20) {
+                    var s = ligne;
+                    if (!debut) {
+                        s = removeUTF16_LEBOM(s);
+                    }
+                    s = s.substring(0, 21);
+                    try {
+                        dateTime = LocalDateTime.parse(s, formatter2);
+                    } catch (DateTimeParseException e) {
+                        log.warn("Le format de la date n'est pas bon à la ligne {}", noLigne, e);
+                    }
+                }
+                if (!debut && dateTime != null) {
+                    dateDebut = Optional.of(dateTime);
+                    debut = true;
+                }
+                if (dateTime != null) {
+                    dateFin = Optional.of(dateTime);
+
+                    if (dateDebutFull2Backup.isEmpty() && ligne != null &&
+                            ligne.contains("resticprofile.exe --name full2 backup")) {
+                        dateDebutFull2Backup = Optional.of(dateTime);
+                    }
+                    if (dateDebutFull2Forget.isEmpty() && ligne != null &&
+                            ligne.contains("resticprofile.exe --name full2 forget")) {
+                        dateDebutFull2Forget = Optional.of(dateTime);
+                    }
+                    if (dateDebutNasbackupBackup.isEmpty() && ligne != null &&
+                            ligne.contains("resticprofile.exe --name nasbackup backup")) {
+                        dateDebutNasbackupBackup = Optional.of(dateTime);
+                    }
+                    if (dateDebutNasbackupForget.isEmpty() && ligne != null &&
+                            ligne.contains("resticprofile.exe --name nasbackup forget")) {
+                        dateDebutNasbackupForget = Optional.of(dateTime);
+                    }
+                    if (dateDebutRaspberryBackup.isEmpty() && ligne != null &&
+                            ligne.contains("resticprofile.exe --name raspberrypi2 backup")) {
+                        dateDebutRaspberryBackup = Optional.of(dateTime);
+                    }
+                    if (dateDebutRaspberryForget.isEmpty() && ligne != null &&
+                            ligne.contains("resticprofile.exe --name raspberrypi2 forget")) {
+                        dateDebutRaspberryForget = Optional.of(dateTime);
+                    }
+                    if (dateDebutRclone.isEmpty() && ligne != null &&
+                            ligne.contains("rclone --progress --checksum")) {
+                        dateDebutRclone = Optional.of(dateTime);
+                    }
+
+                }
+//                if(ligne!=null){
+//                    if(ligne.contains("stderr")||ligne.contains("ERROR")){
+//                        nbErreur++;
+//                    }
+//                }
+                noLigne++;
+            }
+
+
+        } catch (IOException e) {
+            throw new PlateformeException("Erreur pour lire le fichier " + file, e);
+        }
+
+        log.info("date debut={}, date fin={}", dateDebut, dateFin);
+
+        var resticLog = new ResticLog();
+        resticLog.setNomFichier(file.getFileName().toString());
+        dateDebut.ifPresent(resticLog::setDateDebut);
+        dateFin.ifPresent(resticLog::setDateFin);
+        dateDebutFull2Backup.ifPresent(resticLog::setDateDebutFull2Backup);
+        dateDebutFull2Forget.ifPresent(resticLog::setDateDebutFull2Forget);
+        dateDebutNasbackupBackup.ifPresent(resticLog::setDateDebutNasbackupBackup);
+        dateDebutNasbackupForget.ifPresent(resticLog::setDateDebutNasbackupForget);
+        dateDebutRaspberryBackup.ifPresent(resticLog::setDateDebutRaspberryBackup);
+        dateDebutRaspberryForget.ifPresent(resticLog::setDateDebutRaspberryForget);
+        dateDebutRclone.ifPresent(resticLog::setDateDebutRclone);
+        resticLog.setNbErreur(nbErreur);
+        backupLog.setResticLog(resticLog);
     }
 
 
