@@ -9,6 +9,7 @@ import org.apache.commons.lang3.function.FailableConsumer;
 import org.loganalyseb.loganalyseb.exception.PlateformeException;
 import org.loganalyseb.loganalyseb.model.*;
 import org.loganalyseb.loganalyseb.properties.AppProperties;
+import org.loganalyseb.loganalyseb.vo.GoBackupVo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -23,9 +24,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 @Slf4j
 public class AnalyseService {
@@ -44,7 +43,7 @@ public class AnalyseService {
 
     public AnalyseService(AppProperties appProperties, DatabaseService databaseService) {
         this.databaseService = databaseService;
-        this.appProperties = Objects.requireNonNull(appProperties,"la propriété app est nulle");
+        this.appProperties = Objects.requireNonNull(appProperties, "la propriété app est nulle");
         objectMapper = new ObjectMapper();
         objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         objectMapper.findAndRegisterModules();
@@ -87,7 +86,7 @@ public class AnalyseService {
 
                     log.info("fichier: {}, date: {}", file, date);
 
-                    if (dateDerniereAnalyse != null && (date.isBefore(dateDerniereAnalyse)||date.equals(dateDerniereAnalyse))) {
+                    if (dateDerniereAnalyse != null && (date.isBefore(dateDerniereAnalyse) || date.equals(dateDerniereAnalyse))) {
                         log.warn("fichier trop ancien ou déjà traité: {}", file);
                     } else if (date.isAfter(LocalDate.of(2024, 3, 3))) {
                         analyseDate(repertoireLog, date);
@@ -124,9 +123,12 @@ public class AnalyseService {
                 parseLogGithub(file, backupLog);
             });
 
-
             parse(repertoireLog, "log_backup_restic", dateAnalyse, (file) -> {
                 parseLogRestic(file, backupLog);
+            });
+
+            parse(repertoireLog, "log_backup_gobackup", dateAnalyse, (file) -> {
+                parseLogGoBackup(file, backupLog);
             });
 
             backupLog.calculDuree();
@@ -456,6 +458,132 @@ public class AnalyseService {
         dateDebutRclone.ifPresent(resticLog::setDateDebutRclone);
         resticLog.setNbErreur(nbErreur);
         backupLog.setResticLog(resticLog);
+    }
+
+
+    private void parseLogGoBackup(Path file, BackupLog backupLog) throws PlateformeException {
+
+        Optional<LocalDateTime> dateDebut = Optional.empty(), dateFin = Optional.empty();
+        boolean debut = false;
+        int nbErreur = 0;
+        Map<String, GoBackupVo> map = new LinkedHashMap<>();
+        GoBackupVo goBackupVo = new GoBackupVo();
+        final String MESDOC = "mesdoc", WEB = "web", DOCUMENT = "document", PROJETS = "projets";
+        log.info("analyse du fichier: {}", file.getFileName());
+        try (var lignes = Files.lines(file, StandardCharsets.UTF_16LE)) {
+            Iterable<String> iterableStream = lignes::iterator;
+            try {
+                MDC.put("file", file.getFileName().toString());
+                int noLigne = 1;
+                for (var ligne : iterableStream) {
+                    LocalDateTime dateTime = null;
+                    MDC.put("noLigne", "" + noLigne);
+                    if (ligne != null && ligne.length() > 20) {
+                        var s = ligne;
+                        if (!debut) {
+                            s = removeUTF16_LEBOM(s);
+                        }
+                        s = s.substring(0, 21);
+                        if (debutDate(s)) {
+                            try {
+                                dateTime = LocalDateTime.parse(s, formatter2);
+                            } catch (DateTimeParseException e) {
+                                log.warn("Le format de la date n'est pas bon à la ligne {}", noLigne, e);
+                            }
+                        } else {
+                            log.warn("Le format de la date n'est pas bon à la ligne {} (s={})", noLigne, s);
+                        }
+                    }
+                    if (!debut && dateTime != null) {
+                        dateDebut = Optional.of(dateTime);
+                        debut = true;
+                    }
+
+                    if (dateTime != null) {
+                        dateFin = Optional.of(dateTime);
+
+                        if (!map.containsKey(MESDOC) && ligne != null &&
+                                ligne.contains("traitement de mesdoc")) {
+                            //dateDebutMesDoc = Optional.of(dateTime);
+                            goBackupVo = new GoBackupVo();
+                            goBackupVo.setDateDebutMesDoc(Optional.of(dateTime));
+                            map.put(MESDOC, goBackupVo);
+                        } else if (!map.containsKey(WEB) && ligne != null &&
+                                ligne.contains("traitement de web")) {
+                            goBackupVo = new GoBackupVo();
+                            goBackupVo.setDateDebutMesDoc(Optional.of(dateTime));
+                            map.put(WEB, goBackupVo);
+                        } else if (!map.containsKey(DOCUMENT) && ligne != null &&
+                                ligne.contains("traitement de document")) {
+                            goBackupVo = new GoBackupVo();
+                            goBackupVo.setDateDebutMesDoc(Optional.of(dateTime));
+                            map.put(DOCUMENT, goBackupVo);
+                        } else if (!map.containsKey(PROJETS) && ligne != null &&
+                                ligne.contains("traitement de projets")) {
+                            goBackupVo = new GoBackupVo();
+                            goBackupVo.setDateDebutMesDoc(Optional.of(dateTime));
+                            map.put(PROJETS, goBackupVo);
+                        }
+                        if (goBackupVo.getDateDebutCompressionMesdoc().isEmpty() && ligne != null &&
+                                ligne.contains("compression ...")) {
+                            goBackupVo.setDateDebutCompressionMesdoc(Optional.of(dateTime));
+                        }
+                        if (goBackupVo.getDateDebutCompressionMesdoc().isEmpty() && ligne != null &&
+                                ligne.contains("cryptage de ")) {
+                            goBackupVo.setDateDebutCryptageMesdoc(Optional.of(dateTime));
+                        }
+                        if (goBackupVo.getDateDebutEnregistrementHash().isEmpty() && ligne != null &&
+                                ligne.contains("cryptage termin")) {
+                            goBackupVo.setDateDebutEnregistrementHash(Optional.of(dateTime));
+                        }
+                        if (ligne != null &&
+                                ligne.contains("* fin du backup gobackup : ")) {
+                            break;
+                        }
+                    }
+                }
+            } finally {
+                MDC.remove("file");
+                MDC.remove("noLigne");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Erreur pour traiter le fichier " + file, e);
+        }
+
+        var goBackupLog = new GoBackupLog();
+        goBackupLog.setNomFichier(file.getFileName().toString());
+        dateDebut.ifPresent(goBackupLog::setDateDebut);
+        dateFin.ifPresent(goBackupLog::setDateFin);
+        goBackupLog.setNbErreur(nbErreur);
+        if(map.containsKey(MESDOC)) {
+            map.get(MESDOC).getDateDebutMesDoc().ifPresent(goBackupLog::setDateDebutMesdoc);
+            map.get(MESDOC).getDateDebutCompressionMesdoc().ifPresent(goBackupLog::setDateDebutCompressionMesdoc);
+            map.get(MESDOC).getDateDebutCryptageMesdoc().ifPresent(goBackupLog::setDateDebutCryptageMesdoc);
+            map.get(MESDOC).getDateDebutEnregistrementHash().ifPresent(goBackupLog::setDateDebutEnregistrementHashMesdoc);
+        }
+        if(map.containsKey(WEB)) {
+            map.get(WEB).getDateDebutMesDoc().ifPresent(goBackupLog::setDateDebutWeb);
+            map.get(WEB).getDateDebutCompressionMesdoc().ifPresent(goBackupLog::setDateDebutCompressionWeb);
+            map.get(WEB).getDateDebutCryptageMesdoc().ifPresent(goBackupLog::setDateDebutCryptageWeb);
+            map.get(WEB).getDateDebutEnregistrementHash().ifPresent(goBackupLog::setDateDebutEnregistrementHashWeb);
+            map.get(WEB).getDateDebutMesDoc().ifPresent(goBackupLog::setDateFinMesdoc);
+        }
+        if(map.containsKey(DOCUMENT)) {
+            map.get(DOCUMENT).getDateDebutMesDoc().ifPresent(goBackupLog::setDateDebutDocument);
+            map.get(DOCUMENT).getDateDebutCompressionMesdoc().ifPresent(goBackupLog::setDateDebutCompressionDocument);
+            map.get(DOCUMENT).getDateDebutCryptageMesdoc().ifPresent(goBackupLog::setDateDebutCryptageDocument);
+            map.get(DOCUMENT).getDateDebutEnregistrementHash().ifPresent(goBackupLog::setDateDebutEnregistrementHashDocument);
+            map.get(DOCUMENT).getDateDebutMesDoc().ifPresent(goBackupLog::setDateFinWeb);
+        }
+        if(map.containsKey(PROJETS)) {
+            map.get(PROJETS).getDateDebutMesDoc().ifPresent(goBackupLog::setDateDebutProjets);
+            map.get(PROJETS).getDateDebutCompressionMesdoc().ifPresent(goBackupLog::setDateDebutCompressionProjets);
+            map.get(PROJETS).getDateDebutCryptageMesdoc().ifPresent(goBackupLog::setDateDebutCryptageProjets);
+            map.get(PROJETS).getDateDebutEnregistrementHash().ifPresent(goBackupLog::setDateDebutEnregistrementHashProjets);
+            map.get(PROJETS).getDateDebutMesDoc().ifPresent(goBackupLog::setDateFinDocument);
+            dateFin.ifPresent(goBackupLog::setDateFinProjets);
+        }
+        backupLog.setGoBackupLog(goBackupLog);
     }
 
     private List<Path> findAllFiles(Path repertoire, String glob) throws PlateformeException {

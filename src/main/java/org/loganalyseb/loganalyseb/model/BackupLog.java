@@ -13,6 +13,7 @@ public class BackupLog {
     private OvhBackupLog ovhBackupLog;
     private GithubLog githubLog;
     private ResticLog resticLog;
+    private GoBackupLog goBackupLog;
     private LocalDateTime dateAnalyse = LocalDateTime.now();
 
     public void calculDuree() {
@@ -27,6 +28,9 @@ public class BackupLog {
         }
         if (resticLog != null) {
             resticLog.calculDuree();
+        }
+        if (goBackupLog != null) {
+            goBackupLog.calculDuree();
         }
     }
 }
