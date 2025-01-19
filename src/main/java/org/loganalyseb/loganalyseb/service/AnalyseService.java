@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Slf4j
@@ -43,7 +44,7 @@ public class AnalyseService {
 
     public AnalyseService(AppProperties appProperties, DatabaseService databaseService) {
         this.databaseService = databaseService;
-        this.appProperties = appProperties;
+        this.appProperties = Objects.requireNonNull(appProperties,"la propriété app est nulle");
         objectMapper = new ObjectMapper();
         objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         objectMapper.findAndRegisterModules();
