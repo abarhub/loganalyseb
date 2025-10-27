@@ -90,13 +90,10 @@ public class AnalyseService {
 
                     if (dateDerniereAnalyse != null && (date.isBefore(dateDerniereAnalyse) || date.equals(dateDerniereAnalyse))) {
                         log.warn("fichier trop ancien ou déjà traité: {}", file);
-                    } else {//if (date.isAfter(LocalDate.of(2024, 3, 3))) {
+                    } else {
                         analyseDate(repertoireLog, date, file);
                         databaseService.setDerniereDate(date);
-                        break;
-                    } /*else {
-                        log.warn("fichier trop ancien: {}", file);
-                    }*/
+                    }
 
                 } catch (DateTimeParseException e) {
                     log.error("Erreur pour parser la date {}", s, e);
