@@ -12,6 +12,7 @@ public class ResticLog {
     private LocalDateTime dateDebut;
     private LocalDateTime dateFin;
     private int nbErreur;
+    private String nom;
     private LocalDateTime dateDebutFull2Backup;
     private LocalDateTime dateDebutFull2Forget;
     private LocalDateTime dateDebutNasbackupBackup;

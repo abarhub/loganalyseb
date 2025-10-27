@@ -26,6 +26,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 
+import static java.util.Map.entry;
+
 @Slf4j
 public class AnalyseService {
 
@@ -33,6 +35,8 @@ public class AnalyseService {
 
     private final DateTimeFormatter formatters = DateTimeFormatter.ofPattern("yyyyMMdd");
     private final DateTimeFormatter formatter2 = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss: ");
+    private final DateTimeFormatter formatters3 = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private final DateTimeFormatter formatter4 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private final String BOM_UTF_16LE = "\uFEFF";
 
     private ObjectMapper objectMapper;
@@ -59,7 +63,7 @@ public class AnalyseService {
         if (Files.exists(repertoireLog) && Files.isDirectory(repertoireLog)) {
 
             if (appProperties.getDateAnalyse() != null) {
-                analyseDate(repertoireLog, appProperties.getDateAnalyse());
+                analyseDate(repertoireLog, appProperties.getDateAnalyse(), null);// TODO: a corriger
             } else {
                 analyseRepertoire(repertoireLog);
             }
@@ -71,29 +75,30 @@ public class AnalyseService {
     }
 
     private void analyseRepertoire(Path repertoireLog) throws PlateformeException {
-        var glob = "glob:log_backup_20*.log";
+        var glob = "glob:program_output.20*.log";
         var listeFichiers = findAllFiles(repertoireLog, glob);
         var liste = listeFichiers.stream().map(x -> x.getFileName().toString()).sorted().toList();
         LocalDate dateDerniereAnalyse = databaseService.getDaterDernier();
         for (var file : liste) {
             log.info("Détermination de la date du fichier {}", file);
 
-            var s = StringUtils.substring(file, 11, 19);
-            if (s != null && s.length() == 8) {
+            var s = StringUtils.substring(file, 15, 25);
+            if (s != null && s.length() == 10) {
 
                 try {
-                    LocalDate date = LocalDate.parse(s, formatters);
+                    LocalDate date = LocalDate.parse(s, formatters3);
 
                     log.info("fichier: {}, date: {}", file, date);
 
                     if (dateDerniereAnalyse != null && (date.isBefore(dateDerniereAnalyse) || date.equals(dateDerniereAnalyse))) {
                         log.warn("fichier trop ancien ou déjà traité: {}", file);
-                    } else if (date.isAfter(LocalDate.of(2024, 3, 3))) {
-                        analyseDate(repertoireLog, date);
+                    } else {//if (date.isAfter(LocalDate.of(2024, 3, 3))) {
+                        analyseDate(repertoireLog, date, file);
                         databaseService.setDerniereDate(date);
-                    } else {
+                        break;
+                    } /*else {
                         log.warn("fichier trop ancien: {}", file);
-                    }
+                    }*/
 
                 } catch (DateTimeParseException e) {
                     log.error("Erreur pour parser la date {}", s, e);
@@ -104,32 +109,62 @@ public class AnalyseService {
         }
     }
 
-    private void analyseDate(Path repertoireLog, LocalDate dateAnalyse) throws PlateformeException {
+    private void analyseDate(Path repertoireLog, LocalDate dateAnalyse, String file2) throws PlateformeException {
         try {
             MDC.put("date", DateTimeFormatter.ISO_DATE.format(dateAnalyse));
 
             BackupLog backupLog = new BackupLog();
             backupLog.setTimestamp(dateAnalyse);
 
-            parse(repertoireLog, "log_backup", dateAnalyse, (file) -> {
-                parseLogNasbackup(file, backupLog);
-            });
+            Map<String, FailableConsumer<List<Ligne>, Exception>> map = Map.ofEntries(entry("Backup rsync", (lignes) -> {
+                parseLogNasbackup(repertoireLog.resolve(file2), backupLog, lignes);
+            }), entry("fileutils", (lignes) -> {
+                parseLogOvh(repertoireLog.resolve(file2), backupLog, lignes);
+            }),entry("rclone", (lignes) -> {
+                //parseLogGithub(repertoireLog.resolve(file2), backupLog, lignes);
+            }),entry("robocopy", (lignes) -> {
+                //parseLogGithub(repertoireLog.resolve(file2), backupLog, lignes);
+            }),entry("Backup jbackup", (lignes) -> {
+                parseLogGithub(repertoireLog.resolve(file2), backupLog, lignes);
+            }),entry("Resticprofile full2 backup", (lignes) -> {
+                parseLogRestic(repertoireLog.resolve(file2), backupLog, lignes,"full2 backup");
+            }),entry("Resticprofile full2 forget", (lignes) -> {
+                parseLogRestic(repertoireLog.resolve(file2), backupLog, lignes,"full2 forget");
+            }),entry("Resticprofile nasbackup backup", (lignes) -> {
+                parseLogRestic(repertoireLog.resolve(file2), backupLog, lignes,"nasbackup backup");
+            }),entry("Resticprofile nasbackup forget", (lignes) -> {
+                parseLogRestic(repertoireLog.resolve(file2), backupLog, lignes,"nasbackup forget");
+            }),entry("Resticprofile raspberrypi2 backup", (lignes) -> {
+                parseLogRestic(repertoireLog.resolve(file2), backupLog, lignes,"raspberrypi2 backup");
+            }),entry("Resticprofile raspberrypi2 forget", (lignes) -> {
+                parseLogRestic(repertoireLog.resolve(file2), backupLog, lignes,"raspberrypi2 forget");
+            }),entry("Resticprofile rclone", (lignes) -> {
+                parseLogRestic(repertoireLog.resolve(file2), backupLog, lignes, "rclone");
+            }),entry("Backup gobackup", (lignes) -> {
+                parseLogGoBackup(repertoireLog.resolve(file2), backupLog, lignes);
+            }));
 
-            parse(repertoireLog, "log_backup_ovh", dateAnalyse, (file) -> {
-                parseLogOvh(file, backupLog);
-            });
+            parse2(repertoireLog.resolve(file2), map);
 
-            parse(repertoireLog, "log_backup_github", dateAnalyse, (file) -> {
-                parseLogGithub(file, backupLog);
-            });
+//            parse(repertoireLog, "log_backup", dateAnalyse, (file) -> {
+            //parseLogNasbackup(repertoireLog.resolve(file2), backupLog, lignes);
+//            });
 
-            parse(repertoireLog, "log_backup_restic", dateAnalyse, (file) -> {
-                parseLogRestic(file, backupLog);
-            });
-
-            parse(repertoireLog, "log_backup_gobackup", dateAnalyse, (file) -> {
-                parseLogGoBackup(file, backupLog);
-            });
+//            parse(repertoireLog, "log_backup_ovh", dateAnalyse, (file) -> {
+//                parseLogOvh(file, backupLog);
+//            });
+//
+//            parse(repertoireLog, "log_backup_github", dateAnalyse, (file) -> {
+//                parseLogGithub(file, backupLog);
+//            });
+//
+//            parse(repertoireLog, "log_backup_restic", dateAnalyse, (file) -> {
+//                parseLogRestic(file, backupLog);
+//            });
+//
+//            parse(repertoireLog, "log_backup_gobackup", dateAnalyse, (file) -> {
+//                parseLogGoBackup(file, backupLog);
+//            });
 
             backupLog.calculDuree();
             log.info("resultat: {}", backupLog);
@@ -161,32 +196,105 @@ public class AnalyseService {
         }
     }
 
-    private void parseLogNasbackup(Path file, BackupLog backupLog) throws PlateformeException {
+    private void parse2(Path fichier, Map<String, FailableConsumer<List<Ligne>, Exception>> map) throws PlateformeException {
+
+        //try (var lignes = Files.lines(fichier, StandardCharsets.UTF_16LE)) {
+//        try (var lignes = Files.lines(fichier)) {
+        try (var lignes = Files.lines(fichier, StandardCharsets.ISO_8859_1)) {
+
+            Iterable<String> iterableStream = lignes::iterator;
+            Map<String, List<Ligne>> map2 = new HashMap<>();
+            List<Ligne> lignes2 = null;
+            String cle = null;
+            LocalDateTime derniereDate = null;
+
+            for (var ligne : iterableStream) {
+                if (ligne != null && ligne.length() > 20) {
+                    var s = ligne;
+                    s = removeUTF16_LEBOM(s);
+                    var s2 = StringUtils.substring(s, 22);
+                    s = StringUtils.substring(s, 0, 21);
+                    LocalDateTime dateTime = derniereDate;
+                    if (s.startsWith("[") && s.endsWith("]")) {
+                        s = s.substring(1, s.length() - 1);
+                        if (debutDate(s)) {
+                            try {
+                                var date = LocalDateTime.parse(s, formatter4);
+                                //var debutNom = StringUtils.substring(fichier.getFileName().toString(), 15, 25);
+                                //log.info("date: {}", date);
+                                dateTime = date;
+                                derniereDate = date;
+                            } catch (DateTimeParseException e) {
+                                log.error("Erreur pour parser la date {}", ligne, e);
+                            }
+                        }
+                    }
+                    if (StringUtils.isNotBlank(s2)) {
+                        s2 = s2.trim();
+                        if (s2.startsWith(new String("Début de la tache ".getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1))) {
+                            var s3 = s2.substring(19);
+                            if (map.containsKey(s3)) {
+                                lignes2 = new ArrayList<>();
+                                map2.put(s3, lignes2);
+                                cle = s3;
+                                lignes2.add(new Ligne(dateTime, ligne));
+                            } else {
+                                log.error("Erreur pour trouver la tache {}", s3);
+                            }
+                        } else if (s2.startsWith("Fin de la tache ")) {
+                            var s3 = s2.substring(16);
+                            if (lignes2 != null) {
+                                lignes2.add(new Ligne(dateTime, ligne));
+                            }
+                            if (!Objects.equals(s3, cle)) {
+                                log.error("Erreur la tache de fin ne correspond pas : {} != {}", s3, cle);
+                            } else {
+                                if (map.containsKey(cle)) {
+                                    map.get(cle).accept(lignes2);
+                                }
+                            }
+                            cle = null;
+                            lignes2 = null;
+                        } else if (lignes2 != null) {
+                            lignes2.add(new Ligne(dateTime, ligne));
+                        }
+                    }
+                    log.info("ligne: {}", ligne);
+                }
+            }
+        } catch (IOException e) {
+            log.error("Erreur pour lire le fichier {}", fichier, e);
+        } catch (Exception e) {
+            log.error("Erreur pour lire le fichier {}", fichier, e);
+        }
+
+
+    }
+
+    private void parseLogNasbackup(Path file, BackupLog backupLog, List<Ligne> lignes2) {
         Optional<LocalDateTime> dateDebut = Optional.empty(), dateFin = Optional.empty();
         boolean debut = false;
         log.info("analyse du fichier: {}", file.getFileName());
-        try (var lignes = Files.lines(file, StandardCharsets.UTF_16LE)) {
-            Iterable<String> iterableStream = lignes::iterator;
+        try (var lignes = lignes2.stream()) { //Files.lines(file, StandardCharsets.UTF_16LE)) {
+            Iterable<Ligne> iterableStream = lignes::iterator;
             try {
                 MDC.put("file", file.getFileName().toString());
                 int noLigne = 1;
-                for (var ligne : iterableStream) {
+                for (var ligne2 : iterableStream) {
+                    var ligne = ligne2.ligne();
+                    var date = ligne2.date();
                     MDC.put("noLigne", "" + noLigne);
                     LocalDateTime dateTime = null;
-                    if (ligne != null && ligne.length() > 20) {
-                        var s = ligne;
-                        if (!debut) {
-                            s = removeUTF16_LEBOM(s);
-                        }
-                        if (debutDate(s)) {
-                            s = s.substring(0, 21);
-                            try {
-                                dateTime = LocalDateTime.parse(s, formatter2);
-                            } catch (DateTimeParseException e) {
-                                log.warn("Le format de la date n'est pas bon à la ligne {}", noLigne, e);
-                            }
-                        } else {
-                            log.warn("Le format de la date n'est pas bon à la ligne {} (s={})", noLigne, s);
+                    if (date != null) {
+//                        var s = ligne;
+//                        if (!debut) {
+//                            s = removeUTF16_LEBOM(s);
+//                        }
+                        //                            s = s.substring(0, 21);
+                        try {
+                            dateTime = date;//LocalDateTime.parse(s, formatter2);
+                        } catch (DateTimeParseException e) {
+                            log.warn("Le format de la date n'est pas bon à la ligne {}", noLigne, e);
                         }
                     }
                     if (!debut && dateTime != null) {
@@ -204,8 +312,6 @@ public class AnalyseService {
             }
 
 
-        } catch (IOException e) {
-            throw new PlateformeException("Erreur pour lire le fichier " + file, e);
         }
 
         log.info("date debut={}, date fin={}", dateDebut, dateFin);
@@ -218,34 +324,36 @@ public class AnalyseService {
     }
 
 
-    private void parseLogOvh(Path file, BackupLog backupLog) throws PlateformeException {
+    private void parseLogOvh(Path file, BackupLog backupLog, List<Ligne> lignes2) {
         Optional<LocalDateTime> dateDebut = Optional.empty(), dateFin = Optional.empty();
         Optional<LocalDateTime> dateDebutRClone = Optional.empty();
         boolean debut = false;
         log.info("analyse du fichier: {}", file.getFileName());
-        try (var lignes = Files.lines(file, StandardCharsets.UTF_16LE)) {
-            Iterable<String> iterableStream = lignes::iterator;
+        try (var lignes = lignes2.stream()) { //Files.lines(file, StandardCharsets.UTF_16LE)) {
+            Iterable<Ligne> iterableStream = lignes::iterator;
             try {
                 MDC.put("file", file.getFileName().toString());
                 int noLigne = 1;
-                for (var ligne : iterableStream) {
+                for (var ligne2 : iterableStream) {
+                    var ligne = ligne2.ligne();
+                    var date = ligne2.date();
                     LocalDateTime dateTime = null;
                     MDC.put("noLigne", "" + noLigne);
-                    if (ligne != null && ligne.length() > 20) {
-                        var s = ligne;
-                        if (!debut) {
-                            s = removeUTF16_LEBOM(s);
+                    if (date != null) {
+//                        var s = ligne;
+//                        if (!debut) {
+//                            s = removeUTF16_LEBOM(s);
+//                        }
+//                        s = s.substring(0, 21);
+//                        if (debutDate(s)) {
+                        try {
+                            dateTime = date;
+                        } catch (DateTimeParseException e) {
+                            log.warn("Le format de la date n'est pas bon à la ligne {}", noLigne, e);
                         }
-                        s = s.substring(0, 21);
-                        if (debutDate(s)) {
-                            try {
-                                dateTime = LocalDateTime.parse(s, formatter2);
-                            } catch (DateTimeParseException e) {
-                                log.warn("Le format de la date n'est pas bon à la ligne {}", noLigne, e);
-                            }
-                        } else {
-                            log.warn("Le format de la date n'est pas bon à la ligne {} (s={})", noLigne, s);
-                        }
+//                        } else {
+//                            log.warn("Le format de la date n'est pas bon à la ligne {} (s={})", noLigne, s);
+//                        }
                     }
                     if (!debut && dateTime != null) {
                         dateDebut = Optional.of(dateTime);
@@ -268,8 +376,6 @@ public class AnalyseService {
             }
 
 
-        } catch (IOException e) {
-            throw new PlateformeException("Erreur pour lire le fichier " + file, e);
         }
 
         log.info("date debut={}, date fin={}", dateDebut, dateFin);
@@ -282,36 +388,38 @@ public class AnalyseService {
         backupLog.setOvhBackupLog(ovhBackupLog);
     }
 
-    private void parseLogGithub(Path file, BackupLog backupLog) throws PlateformeException {
+    private void parseLogGithub(Path file, BackupLog backupLog, List<Ligne> lignes2) throws PlateformeException {
         Optional<LocalDateTime> dateDebut = Optional.empty(), dateFin = Optional.empty();
         Optional<LocalDateTime> dateDebutRClone = Optional.empty();
         boolean debut = false;
         int nbErreur = 0;
         log.info("analyse du fichier: {}", file.getFileName());
-        try (var lignes = Files.lines(file, StandardCharsets.UTF_16LE)) {
-            Iterable<String> iterableStream = lignes::iterator;
+        try (var lignes = lignes2.stream()) {
+            Iterable<Ligne> iterableStream = lignes::iterator;
             try {
                 MDC.put("file", file.getFileName().toString());
                 int noLigne = 1;
-                for (var ligne : iterableStream) {
+                for (var ligne2 : iterableStream) {
+                    var ligne=ligne2.ligne();
+                    var date=ligne2.date();
                     LocalDateTime dateTime = null;
                     MDC.put("noLigne", "" + noLigne);
-                    if (ligne != null && ligne.length() > 20) {
-                        var s = ligne;
-                        if (!debut) {
-                            s = removeUTF16_LEBOM(s);
-                        }
-                        s = s.substring(0, 21);
-                        if (debutDate(s)) {
+//                    if (ligne != null && ligne.length() > 20) {
+//                        var s = ligne;
+//                        if (!debut) {
+//                            s = removeUTF16_LEBOM(s);
+//                        }
+//                        s = s.substring(0, 21);
+                        if (date!=null) {
                             try {
-                                dateTime = LocalDateTime.parse(s, formatter2);
+                                dateTime = date;
                             } catch (DateTimeParseException e) {
                                 log.warn("Le format de la date n'est pas bon à la ligne {}", noLigne, e);
                             }
                         } else {
-                            log.warn("Le format de la date n'est pas bon à la ligne {} (s={})", noLigne, s);
+                            log.warn("Le format de la date n'est pas bon à la ligne {} (s={})", noLigne, ligne);
                         }
-                    }
+//                    }
                     if (!debut && dateTime != null) {
                         dateDebut = Optional.of(dateTime);
                         debut = true;
@@ -338,8 +446,6 @@ public class AnalyseService {
             }
 
 
-        } catch (IOException e) {
-            throw new PlateformeException("Erreur pour lire le fichier " + file, e);
         }
 
         log.info("date debut={}, date fin={}", dateDebut, dateFin);
@@ -356,7 +462,7 @@ public class AnalyseService {
         return s != null && s.length() > 0 && (s.startsWith("0") || s.startsWith("1") || s.startsWith("2") || s.startsWith("3"));
     }
 
-    private void parseLogRestic(Path file, BackupLog backupLog) throws PlateformeException {
+    private void parseLogRestic(Path file, BackupLog backupLog, List<Ligne> lignes2, String nom) {
         Optional<LocalDateTime> dateDebut = Optional.empty(), dateFin = Optional.empty();
         Optional<LocalDateTime> dateDebutFull2Backup = Optional.empty(), dateDebutFull2Forget = Optional.empty();
         Optional<LocalDateTime> dateDebutNasbackupBackup = Optional.empty(), dateDebutNasbackupForget = Optional.empty();
@@ -365,30 +471,32 @@ public class AnalyseService {
         boolean debut = false;
         int nbErreur = 0;
         log.info("analyse du fichier: {}", file.getFileName());
-        try (var lignes = Files.lines(file, StandardCharsets.UTF_16LE)) {
-            Iterable<String> iterableStream = lignes::iterator;
+        try (var lignes = lignes2.stream()) {
+            Iterable<Ligne> iterableStream = lignes::iterator;
             try {
                 MDC.put("file", file.getFileName().toString());
                 int noLigne = 1;
-                for (var ligne : iterableStream) {
+                for (var ligne2 : iterableStream) {
+                    var ligne = ligne2.ligne();
+                    var date = ligne2.date();
                     LocalDateTime dateTime = null;
                     MDC.put("noLigne", "" + noLigne);
-                    if (ligne != null && ligne.length() > 20) {
-                        var s = ligne;
-                        if (!debut) {
-                            s = removeUTF16_LEBOM(s);
-                        }
-                        s = s.substring(0, 21);
-                        if (debutDate(s)) {
+//                    if (ligne != null && ligne.length() > 20) {
+//                        var s = ligne;
+//                        if (!debut) {
+//                            s = removeUTF16_LEBOM(s);
+//                        }
+//                        s = s.substring(0, 21);
+                        if (date!=null) {
                             try {
-                                dateTime = LocalDateTime.parse(s, formatter2);
+                                dateTime = date;
                             } catch (DateTimeParseException e) {
                                 log.warn("Le format de la date n'est pas bon à la ligne {}", noLigne, e);
                             }
                         } else {
-                            log.warn("Le format de la date n'est pas bon à la ligne {} (s={})", noLigne, s);
+                            log.warn("Le format de la date n'est pas bon à la ligne {} (s={})", noLigne, ligne);
                         }
-                    }
+//                    }
                     if (!debut && dateTime != null) {
                         dateDebut = Optional.of(dateTime);
                         debut = true;
@@ -439,8 +547,6 @@ public class AnalyseService {
             }
 
 
-        } catch (IOException e) {
-            throw new PlateformeException("Erreur pour lire le fichier " + file, e);
         }
 
         log.info("date debut={}, date fin={}", dateDebut, dateFin);
@@ -457,11 +563,12 @@ public class AnalyseService {
         dateDebutRaspberryForget.ifPresent(resticLog::setDateDebutRaspberryForget);
         dateDebutRclone.ifPresent(resticLog::setDateDebutRclone);
         resticLog.setNbErreur(nbErreur);
-        backupLog.setResticLog(resticLog);
+        resticLog.setNom(nom);
+        backupLog.addResticLog(resticLog);
     }
 
 
-    private void parseLogGoBackup(Path file, BackupLog backupLog) throws PlateformeException {
+    private void parseLogGoBackup(Path file, BackupLog backupLog, List<Ligne> lignes2) throws PlateformeException {
 
         Optional<LocalDateTime> dateDebut = Optional.empty(), dateFin = Optional.empty();
         boolean debut = false;
@@ -470,30 +577,32 @@ public class AnalyseService {
         GoBackupVo goBackupVo = new GoBackupVo();
         final String MESDOC = "mesdoc", WEB = "web", DOCUMENT = "document", PROJETS = "projets";
         log.info("analyse du fichier: {}", file.getFileName());
-        try (var lignes = Files.lines(file, StandardCharsets.UTF_16LE)) {
-            Iterable<String> iterableStream = lignes::iterator;
+        try (var lignes = lignes2.stream()) {
+            Iterable<Ligne> iterableStream = lignes::iterator;
             try {
                 MDC.put("file", file.getFileName().toString());
                 int noLigne = 1;
-                for (var ligne : iterableStream) {
+                for (var ligne2 : iterableStream) {
+                    var ligne = ligne2.ligne();
+                    var date = ligne2.date();
                     LocalDateTime dateTime = null;
                     MDC.put("noLigne", "" + noLigne);
-                    if (ligne != null && ligne.length() > 20) {
-                        var s = ligne;
-                        if (!debut) {
-                            s = removeUTF16_LEBOM(s);
-                        }
-                        s = s.substring(0, 21);
-                        if (debutDate(s)) {
+//                    if (ligne != null && ligne.length() > 20) {
+//                        var s = ligne;
+//                        if (!debut) {
+//                            s = removeUTF16_LEBOM(s);
+//                        }
+//                        s = s.substring(0, 21);
+                        if (date!=null) {
                             try {
-                                dateTime = LocalDateTime.parse(s, formatter2);
+                                dateTime = date;
                             } catch (DateTimeParseException e) {
                                 log.warn("Le format de la date n'est pas bon à la ligne {}", noLigne, e);
                             }
                         } else {
-                            log.warn("Le format de la date n'est pas bon à la ligne {} (s={})", noLigne, s);
+                            log.warn("Le format de la date n'est pas bon à la ligne {} (s={})", noLigne, ligne);
                         }
-                    }
+//                    }
                     if (!debut && dateTime != null) {
                         dateDebut = Optional.of(dateTime);
                         debut = true;
@@ -555,27 +664,27 @@ public class AnalyseService {
         dateDebut.ifPresent(goBackupLog::setDateDebut);
         dateFin.ifPresent(goBackupLog::setDateFin);
         goBackupLog.setNbErreur(nbErreur);
-        if(map.containsKey(MESDOC)) {
+        if (map.containsKey(MESDOC)) {
             map.get(MESDOC).getDateDebutMesDoc().ifPresent(goBackupLog::setDateDebutMesdoc);
             map.get(MESDOC).getDateDebutCompressionMesdoc().ifPresent(goBackupLog::setDateDebutCompressionMesdoc);
             map.get(MESDOC).getDateDebutCryptageMesdoc().ifPresent(goBackupLog::setDateDebutCryptageMesdoc);
             map.get(MESDOC).getDateDebutEnregistrementHash().ifPresent(goBackupLog::setDateDebutEnregistrementHashMesdoc);
         }
-        if(map.containsKey(WEB)) {
+        if (map.containsKey(WEB)) {
             map.get(WEB).getDateDebutMesDoc().ifPresent(goBackupLog::setDateDebutWeb);
             map.get(WEB).getDateDebutCompressionMesdoc().ifPresent(goBackupLog::setDateDebutCompressionWeb);
             map.get(WEB).getDateDebutCryptageMesdoc().ifPresent(goBackupLog::setDateDebutCryptageWeb);
             map.get(WEB).getDateDebutEnregistrementHash().ifPresent(goBackupLog::setDateDebutEnregistrementHashWeb);
             map.get(WEB).getDateDebutMesDoc().ifPresent(goBackupLog::setDateFinMesdoc);
         }
-        if(map.containsKey(DOCUMENT)) {
+        if (map.containsKey(DOCUMENT)) {
             map.get(DOCUMENT).getDateDebutMesDoc().ifPresent(goBackupLog::setDateDebutDocument);
             map.get(DOCUMENT).getDateDebutCompressionMesdoc().ifPresent(goBackupLog::setDateDebutCompressionDocument);
             map.get(DOCUMENT).getDateDebutCryptageMesdoc().ifPresent(goBackupLog::setDateDebutCryptageDocument);
             map.get(DOCUMENT).getDateDebutEnregistrementHash().ifPresent(goBackupLog::setDateDebutEnregistrementHashDocument);
             map.get(DOCUMENT).getDateDebutMesDoc().ifPresent(goBackupLog::setDateFinWeb);
         }
-        if(map.containsKey(PROJETS)) {
+        if (map.containsKey(PROJETS)) {
             map.get(PROJETS).getDateDebutMesDoc().ifPresent(goBackupLog::setDateDebutProjets);
             map.get(PROJETS).getDateDebutCompressionMesdoc().ifPresent(goBackupLog::setDateDebutCompressionProjets);
             map.get(PROJETS).getDateDebutCryptageMesdoc().ifPresent(goBackupLog::setDateDebutCryptageProjets);
