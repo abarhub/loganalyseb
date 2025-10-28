@@ -216,7 +216,7 @@ public class AnalyseService {
                             lignes2.add(new Ligne(dateTime, ligne));
                         }
                     }
-                    log.info("ligne: {}", ligne);
+                    log.debug("ligne: {}", ligne);
                 }
             }
         } catch (IOException e) {
