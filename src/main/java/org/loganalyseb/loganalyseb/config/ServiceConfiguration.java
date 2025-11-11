@@ -1,9 +1,11 @@
 package org.loganalyseb.loganalyseb.config;
 
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.loganalyseb.loganalyseb.properties.AppProperties;
 import org.loganalyseb.loganalyseb.runner.Runner;
 import org.loganalyseb.loganalyseb.service.AnalyseService;
 import org.loganalyseb.loganalyseb.service.DatabaseService;
+import org.loganalyseb.loganalyseb.service.MetricsPusher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -12,8 +14,9 @@ public class ServiceConfiguration {
 
 
     @Bean
-    public AnalyseService analyseService(AppProperties appProperties, DatabaseService databaseService) {
-        return new AnalyseService(appProperties, databaseService);
+    public AnalyseService analyseService(AppProperties appProperties, DatabaseService databaseService,
+                                         MetricsPusher metricsPusher) {
+        return new AnalyseService(appProperties, databaseService, metricsPusher);
     }
 
     @Bean
@@ -24,6 +27,12 @@ public class ServiceConfiguration {
     @Bean
     public DatabaseService databaseService(AppProperties appProperties) {
         return new DatabaseService(appProperties);
+    }
+
+    @Bean
+    public MetricsPusher metricsPusher(PrometheusMeterRegistry prometheusRegistry,
+                                       AppProperties appProperties) {
+        return new MetricsPusher(prometheusRegistry, appProperties.getPushGateway());
     }
 
 }

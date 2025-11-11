@@ -17,4 +17,6 @@ public class AppProperties {
 
     private String fichierDonnees;
 
+    private PushGatewayProperties pushGateway;
+
 }

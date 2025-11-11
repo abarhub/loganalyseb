@@ -4,6 +4,21 @@ app:
   repertoire:
   date-analyse:
   fichier-donnees:
+  pushgateway:
+    url: localhost:9091
+    actif: true
+    job-name: my-spring-boot-app
+
+management:
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        pushgateway:
+          enabled: true
+          base-url: http://localhost:9091
+          job: my-spring-boot-app
+          push-rate: 10s  # fréquence d’envoi
 
 
 

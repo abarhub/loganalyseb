@@ -43,9 +43,12 @@ public class AnalyseService {
 
     private final DatabaseService databaseService;
 
-    public AnalyseService(AppProperties appProperties, DatabaseService databaseService) {
+    private final MetricsPusher metricsPusher;
+
+    public AnalyseService(AppProperties appProperties, DatabaseService databaseService, MetricsPusher metricsPusher) {
         this.databaseService = databaseService;
         this.appProperties = Objects.requireNonNull(appProperties, "la propriété app est nulle");
+        this.metricsPusher = metricsPusher;
         objectMapper = new ObjectMapper();
         objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         objectMapper.findAndRegisterModules();
@@ -152,6 +155,7 @@ public class AnalyseService {
                     throw new PlateformeException("Erreur pour créer le json résultat", e);
                 }
             }
+            metricsPusher.pushMetrics(backupLog);
         } finally {
             MDC.remove("date");
         }
