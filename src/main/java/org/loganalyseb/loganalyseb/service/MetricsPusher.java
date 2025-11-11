@@ -48,10 +48,6 @@ public class MetricsPusher {
                 groupingKey.put("instance", "loganalyseb");
                 groupingKey.put("date", backupLog.getTimestamp().toString());
 
-//        CollectorRegistry registry = prometheusRegistry.getPrometheusRegistry();
-
-//        pushGateway.pushAdd(prometheusRegistry.getPrometheusRegistry(), "my-spring-boot-app", groupingKey);
-//        CollectorRegistry registry = prometheusRegistry.getPrometheusRegistry();
                 CollectorRegistry registry = new CollectorRegistry();
 
                 addTotalNasbackup(backupLog, registry);
@@ -60,14 +56,8 @@ public class MetricsPusher {
                 addTotalRestic(backupLog, registry);
                 addTotalGoBackup(backupLog, registry);
 
-                //var myCounter = prometheusRegistry.counter("my_custom_counter");
-                //myCounter.increment();
-                //LOGGER.info("Métriques increment my_custom_counter");
-
                 var jobName = this.jobName;
                 pushGateway.pushAdd(registry, jobName, groupingKey);
-
-//                pushGateway.pushAdd(prometheusRegistry.get(), "my_job", groupingKey);
 
                 LOGGER.info("Métriques envoyées au Pushgateway");
             } catch (IOException e) {
