@@ -25,11 +25,6 @@ public class MetricsPusher {
     private final boolean active;
     private final PushGatewayProperties pushGatewayProperties;
 
-    private static Gauge dataProcessedInBytes /*= Gauge.build()
-            .name("duree_backup_nasbackup_total_secondes")
-            .help("duree de backup de nasbackup total en secondes")
-            .unit("SECONDS")
-            .register()*/;
 
     public MetricsPusher(PrometheusMeterRegistry prometheusRegistry, PushGatewayProperties pushGatewayProperties) {
         this.prometheusRegistry = prometheusRegistry;
@@ -72,7 +67,7 @@ public class MetricsPusher {
         if (backupLog.getNasbackupLog() != null) {
             var duree = backupLog.getNasbackupLog().getDureeTotaleSecondes();
             var dataProcessedInBytes = Gauge.build()
-                    .name("duree_backup_nasbackup_total_secondes")
+                    .name(prefixName("duree_backup_nasbackup_total"))
                     .help("duree de backup de nasbackup total en secondes")
                     .unit("SECONDS")
                     .register(registry);
@@ -85,7 +80,7 @@ public class MetricsPusher {
         if (backupLog.getOvhBackupLog() != null) {
             var duree = backupLog.getOvhBackupLog().getDureeTotaleSecondes();
             var dataProcessedInBytes = Gauge.build()
-                    .name("duree_backup_ovhbackup_total_secondes")
+                    .name(prefixName("duree_backup_ovhbackup_total"))
                     .help("duree de backup de ovhbackup total en secondes")
                     .unit("SECONDS")
                     .register(registry);
@@ -93,7 +88,7 @@ public class MetricsPusher {
             dataProcessedInBytes.set(duree);
             duree = backupLog.getOvhBackupLog().getDureeFileutilsSecondes();
             dataProcessedInBytes = Gauge.build()
-                    .name("duree_backup_fileutils_total_secondes")
+                    .name(prefixName("duree_backup_fileutils_total"))
                     .help("duree de backup de fileutils total en secondes")
                     .unit("SECONDS")
                     .register(registry);
@@ -101,7 +96,7 @@ public class MetricsPusher {
             dataProcessedInBytes.set(duree);
             duree = backupLog.getOvhBackupLog().getDureeRcloneSecondes();
             dataProcessedInBytes = Gauge.build()
-                    .name("duree_backup_rclone_total_secondes")
+                    .name(prefixName("duree_backup_rclone_total"))
                     .help("duree de backup de rclone total en secondes")
                     .unit("SECONDS")
                     .register(registry);
@@ -115,7 +110,7 @@ public class MetricsPusher {
         if (backupLog.getGithubLog() != null) {
             var duree = backupLog.getGithubLog().getDureeTotaleSecondes();
             var dataProcessedInBytes = Gauge.build()
-                    .name("duree_backup_github_total_secondes")
+                    .name(prefixName("duree_backup_github_total"))
                     .help("duree de backup de github total en secondes")
                     .unit("SECONDS")
                     .register(registry);
@@ -124,7 +119,7 @@ public class MetricsPusher {
 
             var nbErreur = backupLog.getGithubLog().getNbErreur();
             var nbErreurCounter = Counter.build()
-                    .name("backup_nb_erreur_github")
+                    .name(prefixName("backup_nb_erreur_github"))
                     .help("backup nb erreur github")
                     .register(registry);
             nbErreurCounter.inc(nbErreur);
@@ -142,7 +137,7 @@ public class MetricsPusher {
 
                 var duree = resticLog.getDureeTotaleSecondes();
                 var dataProcessedInBytes = Gauge.build()
-                        .name("duree_backup_restic_" + nom2 + "_total_secondes")
+                        .name(prefixName("duree_backup_restic_" + nom2 + "_total"))
                         .help("duree de backup de restic " + nom + " total en secondes")
                         .unit("SECONDS")
                         .register(registry);
@@ -169,12 +164,16 @@ public class MetricsPusher {
         if (backupLog.getGoBackupLog() != null) {
             var duree = backupLog.getGoBackupLog().getDureeTotaleSecondes();
             var dataProcessedInBytes = Gauge.build()
-                    .name("duree_backup_gobackup_total_secondes")
+                    .name(prefixName("duree_backup_gobackup_total"))
                     .help("duree de backup de gobackup total en secondes")
                     .unit("SECONDS")
                     .register(registry);
 
             dataProcessedInBytes.set(duree);
         }
+    }
+
+    private String prefixName(String nom) {
+        return pushGatewayProperties.getPrefixName() + "_" + nom;
     }
 }

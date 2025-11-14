@@ -8,5 +8,6 @@ public class PushGatewayProperties {
     private String url;
     private String jobName;
     private boolean actif;
+    private String prefixName;
 
 }

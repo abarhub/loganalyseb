@@ -8,6 +8,7 @@ app:
     url: localhost:9091
     actif: true
     job-name: my-spring-boot-app
+    prefix-name: loganalysebtest
 
 management:
   metrics:
