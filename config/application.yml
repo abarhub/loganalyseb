@@ -7,7 +7,7 @@ app:
   pushgateway:
     url: localhost:9091
     actif: true
-    job-name: my-spring-boot-app
+    job-name: my-spring-boot-app-test
     prefix-name: loganalysebtest
 
 management:
