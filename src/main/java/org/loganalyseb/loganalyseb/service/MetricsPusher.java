@@ -1,7 +1,6 @@
 package org.loganalyseb.loganalyseb.service;
 
 import com.google.common.base.CharMatcher;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
@@ -23,16 +22,22 @@ public class MetricsPusher {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MetricsPusher.class);
 
-    private final PrometheusMeterRegistry prometheusRegistry;
+    // 1. Définir ce qui est acceptable (lettre OU chiffre)
+    private static final CharMatcher LETTRES_ET_CHIFFRES = CharMatcher.inRange('0', '9')
+            .or(CharMatcher.inRange('a', 'z'))
+            .or(CharMatcher.inRange('A', 'Z'));
+
+    // 2. Nier le matcher pour cibler ce qui n'est PAS une lettre ou un chiffre
+    private static final CharMatcher CARACTERES_A_REMPLACER = LETTRES_ET_CHIFFRES.negate();
+
     private final PushGateway pushGateway;
     private final String jobName;
     private final boolean active;
     private final PushGatewayProperties pushGatewayProperties;
     private final List<FileProperties> files;
 
-    public MetricsPusher(PrometheusMeterRegistry prometheusRegistry, PushGatewayProperties pushGatewayProperties,
+    public MetricsPusher(PushGatewayProperties pushGatewayProperties,
                          List<FileProperties> files) {
-        this.prometheusRegistry = prometheusRegistry;
         this.pushGateway = new PushGateway(pushGatewayProperties.getUrl());
         this.jobName = pushGatewayProperties.getJobName();
         this.active = pushGatewayProperties.isActif();
@@ -256,14 +261,7 @@ public class MetricsPusher {
     }
 
     private String remplacerCaracteresSpeciaux(String input) {
-        // 1. Définir ce qui est acceptable (lettre OU chiffre)
-        CharMatcher lettresEtChiffres = CharMatcher.javaLetterOrDigit();
-
-        // 2. Nier le matcher pour cibler ce qui n'est PAS une lettre ou un chiffre
-        CharMatcher caracteresARemplacer = lettresEtChiffres.negate();
-
-        // 3. Effectuer le remplacement
-        return caracteresARemplacer.replaceFrom(input, '_');
+        return CARACTERES_A_REMPLACER.replaceFrom(input, '_');
     }
 
     private void addTotalGoBackup(BackupLog backupLog, CollectorRegistry registry) {
