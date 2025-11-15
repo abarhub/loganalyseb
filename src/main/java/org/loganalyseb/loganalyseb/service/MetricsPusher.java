@@ -105,11 +105,7 @@ public class MetricsPusher {
                         LOGGER.error("Erreur pour calculer la taille du fichier {}", f, e);
                     }
                     if (taille >= 0) {
-                        var fileName = f.getFileName().toString();
-                        var nom = remplacerCaracteresSpeciaux(fileName);
-                        if (!Objects.equals(nom, fileName)) {
-                            LOGGER.info("nom du metrics {} -> {}", fileName, nom);
-                        }
+                        var nom = fileProperties.getNomMetrics();
                         var dataProcessedInBytes = Gauge.build()
                                 .name(prefixName("taille_file_" + nom))
                                 .help("taille du fichier " + f + " total en octets")
