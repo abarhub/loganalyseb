@@ -9,16 +9,15 @@ import io.prometheus.client.exporter.PushGateway;
 import org.loganalyseb.loganalyseb.model.BackupLog;
 import org.loganalyseb.loganalyseb.properties.FileProperties;
 import org.loganalyseb.loganalyseb.properties.PushGatewayProperties;
+import org.loganalyseb.loganalyseb.properties.TypeMetricsFichier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.CollectionUtils;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.nio.file.Path;
+import java.util.*;
 
 public class MetricsPusher {
 
@@ -96,30 +95,78 @@ public class MetricsPusher {
     private void addFiles(CollectorRegistry registry) {
         if (!CollectionUtils.isEmpty(files)) {
             for (FileProperties fileProperties : files) {
-                var f = fileProperties.getPath();
-                if (Files.exists(f) && Files.isRegularFile(f)) {
-                    long taille = -1;
-                    try {
-                        taille = Files.size(f);
-                    } catch (Exception e) {
-                        LOGGER.error("Erreur pour calculer la taille du fichier {}", f, e);
-                    }
-                    if (taille >= 0) {
-                        var nom = fileProperties.getNomMetrics();
-                        var dataProcessedInBytes = Gauge.build()
-                                .name(prefixName("taille_file_" + nom))
-                                .help("taille du fichier " + f + " total en octets")
-                                .unit("OCTETS")
-                                .register(registry);
+                if (fileProperties.getTypeMetrics() == TypeMetricsFichier.FICHIER) {
+                    var f = fileProperties.getPath();
+                    if (Files.exists(f) && Files.isRegularFile(f)) {
+                        long taille = -1;
+                        try {
+                            taille = Files.size(f);
+                            LOGGER.info("taille du fichier {} : {}", f, taille);
+                        } catch (Exception e) {
+                            LOGGER.error("Erreur pour calculer la taille du fichier {}", f, e);
+                        }
+                        if (taille >= 0) {
+                            var nom = fileProperties.getNomMetrics();
+                            var dataProcessedInBytes = Gauge.build()
+                                    .name(prefixName("taille_file_" + nom))
+                                    .help("taille du fichier " + f + " total en octets")
+                                    .unit("OCTETS")
+                                    .register(registry);
 
-                        dataProcessedInBytes.set(taille);
+                            dataProcessedInBytes.set(taille);
+                        }
+                    } else {
+                        LOGGER.warn("Le fichier {} n'existe pas ou n'est pas un fichier", f);
                     }
-                } else {
-                    LOGGER.warn("Le fichier {} n'existe pas ou n'est pas un fichier", f);
+                } else if (fileProperties.getTypeMetrics() == TypeMetricsFichier.LAST_COBIAN_INCREMENTAL) {
+                    var f = fileProperties.getPath();
+                    if (Files.exists(f) && Files.isDirectory(f)) {
+                        var fichierOpt = trouveFichier(f, fileProperties.getDebutFichier());
+                        if (fichierOpt.isPresent()) {
+                            var fichier = fichierOpt.get();
+                            long taille = -1;
+                            try {
+                                taille = Files.size(fichier);
+                                LOGGER.info("taille du fichier cobian {} : {}", fichier, taille);
+                            } catch (Exception e) {
+                                LOGGER.error("Erreur pour calculer la taille du fichier {}", fichier, e);
+                            }
+                            if (taille >= 0) {
+                                var nom = fileProperties.getNomMetrics();
+                                var dataProcessedInBytes = Gauge.build()
+                                        .name(prefixName("taille_file_" + nom))
+                                        .help("taille du cobian fichier " + fichier + " total en octets")
+                                        .unit("OCTETS")
+                                        .register(registry);
+
+                                dataProcessedInBytes.set(taille);
+                            }
+                        } else {
+                            LOGGER.warn("Il n'y a aucun fichiers à prendre dans le répertoire {}", f);
+                        }
+                    }
                 }
 
             }
         }
+    }
+
+    private Optional<Path> trouveFichier(Path f, String debutFichier) {
+        try (var stream = Files.list(f)) {
+            var lastFile = stream
+                    .map(x -> x.getFileName().toString())
+                    .filter(p ->
+                            p.startsWith(debutFichier) &&
+                                    p.endsWith("(Incremental).7z.001"))
+                    .max(Comparator.naturalOrder());
+            return lastFile.map(f::resolve);
+
+
+        } catch (IOException e) {
+            LOGGER.error("Erreur pour trouver le fichier correspondant au critere '{}' dans le répertoire {}",
+                    debutFichier, f, e);
+        }
+        return Optional.empty();
     }
 
     private void addTotalNasbackup(BackupLog backupLog, CollectorRegistry registry) {

@@ -16,6 +16,11 @@ app:
     -
       path: build/libs/loganalyseb-0.0.1-SNAPSHOT.jar
       nomMetrics: loganalyseb_jar
+    -
+      path: ${app.files2.path}
+      nomMetrics: ${app.files2.nomMetrics}
+      typeMetrics: ${app.files2.typeMetrics}
+      debutFichier: ${app.files2.debutFichier}
 
 
 management:

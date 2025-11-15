@@ -9,5 +9,7 @@ public class FileProperties {
 
     private Path path;
     private String nomMetrics;
+    private TypeMetricsFichier typeMetrics = TypeMetricsFichier.FICHIER;
+    private String debutFichier;
 
 }
