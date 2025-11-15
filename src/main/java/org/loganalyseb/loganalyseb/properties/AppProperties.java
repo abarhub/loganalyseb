@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Configuration
 @ConfigurationProperties(prefix = "app")
@@ -18,5 +19,7 @@ public class AppProperties {
     private String fichierDonnees;
 
     private PushGatewayProperties pushGateway;
+
+    private List<FileProperties> files;
 
 }

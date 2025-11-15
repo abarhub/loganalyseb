@@ -73,6 +73,12 @@ public class AnalyseService {
         } else {
             throw new PlateformeException("Le répertoire " + repertoireLog + " n'existe pas");
         }
+
+        analyseFichiers();
+    }
+
+    private void analyseFichiers() {
+        metricsPusher.pushFilesMetrics();
     }
 
     private void analyseRepertoire(Path repertoireLog) throws PlateformeException {

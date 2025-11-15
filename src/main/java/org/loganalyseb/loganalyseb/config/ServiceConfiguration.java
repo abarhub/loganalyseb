@@ -32,7 +32,7 @@ public class ServiceConfiguration {
     @Bean
     public MetricsPusher metricsPusher(PrometheusMeterRegistry prometheusRegistry,
                                        AppProperties appProperties) {
-        return new MetricsPusher(prometheusRegistry, appProperties.getPushGateway());
+        return new MetricsPusher(prometheusRegistry, appProperties.getPushGateway(),appProperties.getFiles());
     }
 
 }

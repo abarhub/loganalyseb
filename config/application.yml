@@ -9,6 +9,14 @@ app:
     actif: true
     job-name: my-spring-boot-app-test
     prefix-name: loganalysebtest
+  files:
+    -
+      path: build.gradle
+      nomMetrics: buildgradle
+    -
+      path: build/libs/loganalyseb-0.0.1-SNAPSHOT.jar
+      nomMetrics: loganalyseb_jar
+
 
 management:
   metrics:
